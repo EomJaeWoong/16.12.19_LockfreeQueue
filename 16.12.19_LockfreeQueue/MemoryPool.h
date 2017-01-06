@@ -252,12 +252,14 @@ public:
 	DATA	*Alloc(bool bPlacementNew = true)
 	{
 		st_BLOCK_NODE *stpBlock;
+		int iBlockCount = m_iBlockCount;
 
-		if (m_iBlockCount <= m_iAllocCount)
+		InterlockedIncrement64((LONG64 *)&m_iAllocCount);
+
+		if (iBlockCount < m_iAllocCount)
 		{
 			stpBlock = (st_BLOCK_NODE *)malloc(sizeof(DATA) + sizeof(st_BLOCK_NODE));
 			InterlockedIncrement64((LONG64 *)&m_iBlockCount);
-			InterlockedIncrement64((LONG64 *)&m_iAllocCount);
 		}
 
 		else
@@ -282,7 +284,7 @@ public:
 		if (!m_LockfreeStack.Push((st_BLOCK_NODE *)pData - 1))
 			return false;
 
-		InterlockedIncrement64((LONG64 *)&m_iAllocCount);
+		InterlockedDecrement64((LONG64 *)&m_iAllocCount);
 		return true;
 	}
 

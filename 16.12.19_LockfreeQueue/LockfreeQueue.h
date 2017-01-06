@@ -1,6 +1,7 @@
 #ifndef __LOCKFREEQUEUE__H__
 #define __LOCKFREEQUEUE__H__
 
+#include <Windows.h>
 #include "MemoryPool.h"
 
 template <class DATA>
@@ -27,26 +28,49 @@ public:
 	/////////////////////////////////////////////////////////////////////////
 	CLockfreeQueue()
 	{
-		_pMemoryPool = new _pMemoryPool;
+		_pMemoryPool = new CMemoryPool<st_NODE>(0);
 
-		long					_lUseSize;
+		_lUseSize = 0;
 
-		st_END_NODE			*_pHead;
-		st_END_NODE			*_pTail;
+		_pHead = new st_END_NODE;
+		_pHead->iUniqueNum = 0;
 
-		__int64				_iUniqueNumHead;
-		__int64				_iUniqueNumTail;
+		_pTail = new st_END_NODE;
+		_pTail->iUniqueNum = 0;
+
+		/////////////////////////////////////////////////////////////////////
+		// 더미 노드 붙이기
+		/////////////////////////////////////////////////////////////////////
+		st_NODE *stDummyNode = _pMemoryPool->Alloc();
+		stDummyNode->pNext = NULL;
+
+		_pHead->pEndNode = stDummyNode;
+		_pTail->pEndNode = stDummyNode;
+
+		_iUniqueNumHead = 0;
+		_iUniqueNumTail = 0;
 	}
 
 	/////////////////////////////////////////////////////////////////////////
-	// 생성자
+	// 소멸자
 	//
 	// Parameters: 없음.
 	// Return: 없음.
 	/////////////////////////////////////////////////////////////////////////
 	virtual ~CLockfreeQueue()
 	{
-		
+		st_NODE *pTemp;
+
+		while (_pHead != NULL)
+		{
+			pTemp = _pHead->pEndNode;
+			_pHead->pEndNode = _pHead->pEndNode->pNext;
+			_pMemoryPool->Free(pTemp);
+		}
+
+		delete _pMemoryPool;
+		delete _pHead;
+		delete _pTail;
 	}
 
 	/////////////////////////////////////////////////////////////////////////
@@ -74,7 +98,50 @@ public:
 	/////////////////////////////////////////////////////////////////////////
 	bool	Put(DATA Data)
 	{
+		st_END_NODE pTail;
+		st_NODE *pTailNext, *pNode = _pMemoryPool->Alloc();
 
+		pNode->Data = Data;
+		pNode->pNext = NULL;
+		__int64 iUniqueNumTail = InterlockedIncrement64(&_iUniqueNumTail);
+
+		while (1)
+		{
+			/////////////////////////////////////////////////////////////////
+			// Tail 지역변수 저장
+			/////////////////////////////////////////////////////////////////
+			pTail.pEndNode = _pTail->pEndNode;
+			pTail.iUniqueNum = _pTail->iUniqueNum;
+
+			/////////////////////////////////////////////////////////////////
+			// Tail->Next 저장
+			/////////////////////////////////////////////////////////////////
+			pTailNext = pTail.pEndNode->pNext;
+
+			/////////////////////////////////////////////////////////////////
+			// 일단 비교해보고 tail->next가 null이면
+			// Unique값과 비교해서 바꿈
+			/////////////////////////////////////////////////////////////////
+			if (pTailNext == NULL)
+			{
+				if (InterlockedCompareExchangePointer((PVOID *)&pTail.pEndNode->pNext, pNode, pTailNext) == nullptr)
+				{
+					InterlockedCompareExchange128((LONG64 *)_pTail, iUniqueNumTail, (LONG64)pNode, (LONG64 *)&pTail);
+					break;
+				}
+			}
+
+			/////////////////////////////////////////////////////////////////
+			// 일단 비교해보고 tail->next가 null아니면
+			// 그냥 일단 Tail 밈
+			/////////////////////////////////////////////////////////////////
+			else
+			{
+				InterlockedCompareExchange128((LONG64 *)_pTail, iUniqueNumTail, (LONG64)pTail.pEndNode->pNext, (LONG64 *)&pTail);
+			}
+		}
+		InterlockedExchangeAdd(&_lUseSize, 1);
+		return true;
 	}
 
 	/////////////////////////////////////////////////////////////////////////
@@ -85,9 +152,58 @@ public:
 	/////////////////////////////////////////////////////////////////////////
 	bool	Get(DATA *pOutData)
 	{
+		st_END_NODE pHead, pTail;
+		st_NODE  *pHeadNext, *pNode;
+		__int64 iUniqueNumHead = InterlockedIncrement64(&_iUniqueNumHead);
 
+		if (_lUseSize == 0)
+			return false;
+
+		while (1)
+		{
+			/////////////////////////////////////////////////////////////////
+			// Head 지역변수 저장
+			/////////////////////////////////////////////////////////////////
+			pHead.pEndNode = _pHead->pEndNode;
+			pHead.iUniqueNum = _pHead->iUniqueNum;
+
+			/////////////////////////////////////////////////////////////////
+			// Tail 지역변수 저장
+			/////////////////////////////////////////////////////////////////
+			pTail.pEndNode = _pTail->pEndNode;
+			pTail.iUniqueNum = _pTail->iUniqueNum;
+
+			pHeadNext = pHead.pEndNode->pNext;
+
+			/////////////////////////////////////////////////////////////////
+			// Queue가 비었을 때
+			/////////////////////////////////////////////////////////////////
+			if (pHead.pEndNode == pTail.pEndNode)
+			{
+				if (pHeadNext == NULL)
+					return false;
+			}
+
+			if (pTail.pEndNode->pNext != NULL)
+			{
+				__int64 iUniqueNumTail = InterlockedIncrement64(&_iUniqueNumTail);
+				InterlockedCompareExchange128((LONG64 *)_pTail, iUniqueNumTail, (LONG64)pTail.pEndNode->pNext, (LONG64 *)&pTail);
+			}
+
+			else
+			{
+				*pOutData = pHeadNext->Data;
+				if (InterlockedCompareExchange128((LONG64 *)_pHead, iUniqueNumHead, (LONG64)pHead.pEndNode->pNext, (LONG64 *)&pHead))
+				{
+					_pMemoryPool->Free(pHead.pEndNode);
+					break;
+				}
+			}
+		}
+
+		InterlockedExchangeAdd(&_lUseSize, -1);
+		return true;
 	}
-
 private:
 	CMemoryPool<st_NODE>	*_pMemoryPool;
 
