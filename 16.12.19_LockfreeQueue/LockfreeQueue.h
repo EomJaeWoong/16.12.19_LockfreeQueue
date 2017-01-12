@@ -175,22 +175,22 @@ public:
 
 			pHeadNext = pHead.pEndNode->pNext;
 
-			/////////////////////////////////////////////////////////////////
-			// Queue가 비었을 때
-			/////////////////////////////////////////////////////////////////
-			if (pHead.pEndNode == pTail.pEndNode)
-			{
-				if (pHeadNext == NULL)
-					return false;
-			}
-
 			if (pTail.pEndNode->pNext != NULL)
 			{
 				__int64 iUniqueNumTail = InterlockedIncrement64(&_iUniqueNumTail);
 				InterlockedCompareExchange128((LONG64 *)_pTail, iUniqueNumTail, (LONG64)pTail.pEndNode->pNext, (LONG64 *)&pTail);
 			}
 
-			else
+			/////////////////////////////////////////////////////////////////
+			// Queue가 비었을 때
+			/////////////////////////////////////////////////////////////////
+			if (pHead.pEndNode == pTail.pEndNode)
+			{
+				if (pHeadNext == NULL)
+					continue;
+			}
+
+			else if (pHeadNext != NULL)
 			{
 				*pOutData = pHeadNext->Data;
 				if (InterlockedCompareExchange128((LONG64 *)_pHead, iUniqueNumHead, (LONG64)pHead.pEndNode->pNext, (LONG64 *)&pHead))

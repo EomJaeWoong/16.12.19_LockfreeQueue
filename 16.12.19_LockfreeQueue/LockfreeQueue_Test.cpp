@@ -101,7 +101,7 @@ unsigned __stdcall StackThread(void *pParam)
 
 	while (1){
 		// 3. 약간대기  Sleep (0 ~ 3)
-		Sleep(1);
+		Sleep(rand() % 3);
 
 		// 4. 내가 넣은 데이터 수 만큼 뽑음 
 		// 4. - 이때 뽑히는건 내가 넣은 데이터일 수도, 다른 스레드가 넣은 데이터일 수도 있음
@@ -130,7 +130,7 @@ unsigned __stdcall StackThread(void *pParam)
 		}
 
 		// 7. 약간대기
-		Sleep(1);
+		Sleep(rand() % 3);
 
 		// 8. + 1 한 데이터가 유효한지 확인 (뽑은 데이터를 누가 사용하는지 확인)
 		for (int iCnt = 0; iCnt < iRand; iCnt++)
