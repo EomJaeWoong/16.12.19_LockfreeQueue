@@ -110,9 +110,9 @@ public:
 			/////////////////////////////////////////////////////////////////
 			// Tail 지역변수 저장
 			/////////////////////////////////////////////////////////////////
-			pTail.pEndNode = _pTail->pEndNode;
 			pTail.iUniqueNum = _pTail->iUniqueNum;
-
+			pTail.pEndNode = _pTail->pEndNode;
+			
 			/////////////////////////////////////////////////////////////////
 			// Tail->Next 저장
 			/////////////////////////////////////////////////////////////////
@@ -140,7 +140,8 @@ public:
 				InterlockedCompareExchange128((LONG64 *)_pTail, iUniqueNumTail, (LONG64)pTail.pEndNode->pNext, (LONG64 *)&pTail);
 			}
 		}
-		InterlockedExchangeAdd(&_lUseSize, 1);
+
+		InterlockedIncrement64((LONG64 *)&_lUseSize);
 		return true;
 	}
 
@@ -159,20 +160,22 @@ public:
 		if (_lUseSize == 0)
 			return false;
 
+		InterlockedDecrement64((LONG64 *)&_lUseSize);
+
 		while (1)
 		{
 			/////////////////////////////////////////////////////////////////
 			// Head 지역변수 저장
 			/////////////////////////////////////////////////////////////////
-			pHead.pEndNode = _pHead->pEndNode;
 			pHead.iUniqueNum = _pHead->iUniqueNum;
-
+			pHead.pEndNode = _pHead->pEndNode;
+			
 			/////////////////////////////////////////////////////////////////
 			// Tail 지역변수 저장
 			/////////////////////////////////////////////////////////////////
-			pTail.pEndNode = _pTail->pEndNode;
 			pTail.iUniqueNum = _pTail->iUniqueNum;
-
+			pTail.pEndNode = _pTail->pEndNode;
+			
 			pHeadNext = pHead.pEndNode->pNext;
 
 			/////////////////////////////////////////////////////////////////
@@ -201,7 +204,6 @@ public:
 			}
 		}
 
-		InterlockedExchangeAdd(&_lUseSize, -1);
 		return true;
 	}
 private:
